@@ -80,7 +80,7 @@
 
 <div class="card">
   <div class="row">
-    <input id="url" type="url" inputmode="url" placeholder="วางลิงก์ไฟล์วิดีโอ เช่น https://…/clip.mp4" autocomplete="off">
+    <input id="url" type="url" inputmode="url" placeholder="วางลิงก์ไฟล์ หรือหน้าเว็บที่มีวิดีโอ" autocomplete="off">
     <button class="btn" id="go">โหลดเสียง</button>
   </div>
   <div class="or">หรือ</div>
@@ -300,33 +300,76 @@ async function importMedia(blob, name) {
   return true;
 }
 
-const PAGE_SITES = /(^|\.)(youtube\.com|youtu\.be|tiktok\.com|facebook\.com|fb\.watch|instagram\.com|twitter\.com|x\.com|vimeo\.com|bilibili\.com|dailymotion\.com)$/i;
+function extractVideoLinks(html, pageUrl) {
+  const links = [];
+  const add = raw => {
+    if (!raw) return;
+    raw = raw.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').trim();
+    if (!raw || raw.startsWith('blob:') || raw.startsWith('data:')) return;
+    try {
+      const u = new URL(raw, pageUrl);
+      if (/^https?:$/.test(u.protocol) && !links.includes(u.href)) links.push(u.href);
+    } catch (_) {}
+  };
+  // HTML5 video/source tags and common video metadata fields
+  const patterns = [
+    /<video\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/ig,
+    /<source\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/ig,
+    /<meta\b[^>]*(?:property|name)\s*=\s*["'](?:og:video|og:video:url|twitter:player:stream)["'][^>]*content\s*=\s*["']([^"']+)["']/ig,
+    /<meta\b[^>]*content\s*=\s*["']([^"']+)["'][^>]*(?:property|name)\s*=\s*["'](?:og:video|og:video:url|twitter:player:stream)["']/ig
+  ];
+  for (const re of patterns) { let m; while ((m = re.exec(html)) !== null) add(m[1]); }
+  return links;
+}
+async function downloadMediaUrl(mediaUrl, pageUrl) {
+  const res = await fetch(mediaUrl);
+  if (!res.ok) throw new Error(`โหลดไม่สำเร็จ (รหัส ${res.status})`);
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+  if (/text\/html/.test(ct)) throw new Error('ลิงก์ที่พบยังเป็นหน้าเว็บ ไม่ใช่ไฟล์สื่อโดยตรง');
+  if (/mpegurl|\.m3u8/i.test(ct + mediaUrl)) throw new Error('พบวิดีโอแบบสตรีม HLS (.m3u8) ซึ่งเวอร์ชันนี้ยังนำเข้าไม่ได้');
+  const total = +res.headers.get('content-length') || 0;
+  const reader = res.body.getReader(), parts = []; let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read(); if (done) break;
+    parts.push(value); got += value.length;
+    setStatus(`กำลังดาวน์โหลด ${mb(got)}${total ? ' / ' + mb(total) : ''}`, total ? got / total : null);
+  }
+  const blob = new Blob(parts, { type: ct || 'application/octet-stream' });
+  const pathname = new URL(mediaUrl).pathname;
+  const name = pathname.split('/').pop() || new URL(pageUrl || mediaUrl).hostname;
+  return { blob, name };
+}
 $('go').onclick = async () => {
   let u = $('url').value.trim(); if (!u) return;
   if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
   let url; try { url = new URL(u); } catch (e) { setStatus('ลิงก์ไม่ถูกต้อง', null, true); return; }
-  if (PAGE_SITES.test(url.hostname)) {
-    setStatus('ลิงก์นี้เป็นหน้าเว็บของแพลตฟอร์มวิดีโอ ใช้ไม่ได้ ต้องเป็นลิงก์ที่เปิดแล้วได้ไฟล์วิดีโอโดยตรง (เช่น ลงท้าย .mp4)', null, true); return;
-  }
   $('go').disabled = true;
   try {
-    setStatus('กำลังเชื่อมต่อ…', 0);
+    setStatus('กำลังตรวจสอบลิงก์…', 0);
     let res;
     try { res = await fetch(url.href); }
-    catch (e) { setStatus('เว็บนี้ไม่อนุญาตให้แอปโหลดไฟล์โดยตรง · ให้โหลดไฟล์ลงเครื่องก่อน แล้วกด “เลือกจากเครื่อง”', null, true); return; }
+    catch (e) { setStatus('เว็บไม่อนุญาตให้แอปเข้าถึง (CORS) · ถ้าเป็นวิดีโอในหน้าเว็บ ให้เปิดเว็บนั้นแล้วบันทึก/ดาวน์โหลดไฟล์ก่อนนำเข้า', null, true); return; }
     if (!res.ok) { setStatus(`โหลดไม่สำเร็จ (รหัส ${res.status})`, null, true); return; }
-    const ct = res.headers.get('content-type') || '';
-    if (/text\/html/.test(ct)) { setStatus('ลิงก์นี้เป็นหน้าเว็บ ไม่ใช่ไฟล์วิดีโอ', null, true); return; }
-    const total = +res.headers.get('content-length') || 0;
-    const reader = res.body.getReader(); const parts = []; let got = 0;
-    for (;;) {
-      const { done, value } = await reader.read(); if (done) break;
-      parts.push(value); got += value.length;
-      setStatus(`กำลังดาวน์โหลด ${mb(got)}${total ? ' / ' + mb(total) : ''}`, total ? got / total : null);
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    if (/text\/html/.test(ct)) {
+      const html = await res.text();
+      const links = extractVideoLinks(html, url.href);
+      if (!links.length) { setStatus('หน้าเว็บนี้ไม่พบลิงก์วิดีโอที่อ่านได้ · วิดีโออาจถูกโหลดด้วย JavaScript, ซ่อนหลังระบบล็อกอิน หรือเป็นสตรีมที่ยังไม่รองรับ', null, true); return; }
+      let lastError = '';
+      for (const link of links) {
+        try {
+          setStatus(`พบวิดีโอ กำลังลองโหลด…`, 0);
+          const media = await downloadMediaUrl(link, url.href);
+          if (await importMedia(media.blob, media.name)) { $('url').value = ''; return; }
+        } catch (e) { lastError = e.message || ''; }
+      }
+      setStatus(lastError || 'พบลิงก์วิดีโอ แต่ไม่สามารถโหลดได้ · เว็บอาจปิดกั้นการเข้าถึง', null, true); return;
     }
-    const blob = new Blob(parts, { type: ct });
-    const name = url.pathname.split('/').pop() || url.hostname;
-    if (await importMedia(blob, name)) $('url').value = '';
+    // Direct media URL
+    const media = await downloadMediaUrl(url.href, url.href);
+    if (await importMedia(media.blob, media.name)) $('url').value = '';
+  } catch (e) {
+    setStatus(e.message || 'โหลดไฟล์ไม่สำเร็จ', null, true);
   } finally { $('go').disabled = false; }
 };
 $('url').addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); });
