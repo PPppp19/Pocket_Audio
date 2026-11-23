@@ -322,22 +322,32 @@ function extractVideoLinks(html, pageUrl) {
   return links;
 }
 async function downloadMediaUrl(mediaUrl, pageUrl) {
-  const res = await fetch(mediaUrl);
-  if (!res.ok) throw new Error(`โหลดไม่สำเร็จ (รหัส ${res.status})`);
-  const ct = (res.headers.get('content-type') || '').toLowerCase();
-  if (/text\/html/.test(ct)) throw new Error('ลิงก์ที่พบยังเป็นหน้าเว็บ ไม่ใช่ไฟล์สื่อโดยตรง');
-  if (/mpegurl|\.m3u8/i.test(ct + mediaUrl)) throw new Error('พบวิดีโอแบบสตรีม HLS (.m3u8) ซึ่งเวอร์ชันนี้ยังนำเข้าไม่ได้');
-  const total = +res.headers.get('content-length') || 0;
-  const reader = res.body.getReader(), parts = []; let got = 0;
-  for (;;) {
-    const { done, value } = await reader.read(); if (done) break;
-    parts.push(value); got += value.length;
-    setStatus(`กำลังดาวน์โหลด ${mb(got)}${total ? ' / ' + mb(total) : ''}`, total ? got / total : null);
+  // ดึงไฟล์ผ่าน backend ตัวกลาง เพื่อไม่ให้เบราว์เซอร์บล็อกด้วย CORS
+  const api = '/api/media?url=' + encodeURIComponent(mediaUrl);
+  let res;
+  try { res = await fetch(api); }
+  catch (e) { throw new Error('เชื่อมต่อเซิร์ฟเวอร์ตัวกลางไม่ได้ · กรุณาเปิด Pocket Audio ผ่าน server.js'); }
+  if (!res.ok) {
+    let msg = `โหลดไม่สำเร็จ (รหัส ${res.status})`;
+    try { const j = await res.json(); if (j.error) msg = j.error; } catch (_) {}
+    throw new Error(msg);
   }
-  const blob = new Blob(parts, { type: ct || 'application/octet-stream' });
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+  if (/text\/html|application\/json/.test(ct)) throw new Error('ลิงก์ที่พบยังไม่ใช่ไฟล์เสียงหรือวิดีโอ');
+  if (/mpegurl|\.m3u8/i.test(ct + mediaUrl)) throw new Error('พบสตรีม HLS (.m3u8) · เวอร์ชันนี้ยังไม่รองรับ');
+  const blob = await res.blob();
+  if (!blob.size) throw new Error('ไฟล์ว่างหรือเว็บไซต์ไม่ส่งข้อมูลกลับมา');
   const pathname = new URL(mediaUrl).pathname;
   const name = pathname.split('/').pop() || new URL(pageUrl || mediaUrl).hostname;
   return { blob, name };
+}
+async function resolvePageUrl(pageUrl) {
+  let res;
+  try { res = await fetch('/api/resolve?url=' + encodeURIComponent(pageUrl)); }
+  catch (e) { throw new Error('เชื่อมต่อเซิร์ฟเวอร์ตัวกลางไม่ได้ · กรุณาเปิด Pocket Audio ผ่าน server.js'); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `ตรวจสอบหน้าเว็บไม่สำเร็จ (${res.status})`);
+  return data;
 }
 $('go').onclick = async () => {
   let u = $('url').value.trim(); if (!u) return;
@@ -345,29 +355,27 @@ $('go').onclick = async () => {
   let url; try { url = new URL(u); } catch (e) { setStatus('ลิงก์ไม่ถูกต้อง', null, true); return; }
   $('go').disabled = true;
   try {
-    setStatus('กำลังตรวจสอบลิงก์…', 0);
-    let res;
-    try { res = await fetch(url.href); }
-    catch (e) { setStatus('เว็บไม่อนุญาตให้แอปเข้าถึง (CORS) · ถ้าเป็นวิดีโอในหน้าเว็บ ให้เปิดเว็บนั้นแล้วบันทึก/ดาวน์โหลดไฟล์ก่อนนำเข้า', null, true); return; }
-    if (!res.ok) { setStatus(`โหลดไม่สำเร็จ (รหัส ${res.status})`, null, true); return; }
-    const ct = (res.headers.get('content-type') || '').toLowerCase();
-    if (/text\/html/.test(ct)) {
-      const html = await res.text();
-      const links = extractVideoLinks(html, url.href);
-      if (!links.length) { setStatus('หน้าเว็บนี้ไม่พบลิงก์วิดีโอที่อ่านได้ · วิดีโออาจถูกโหลดด้วย JavaScript, ซ่อนหลังระบบล็อกอิน หรือเป็นสตรีมที่ยังไม่รองรับ', null, true); return; }
-      let lastError = '';
-      for (const link of links) {
-        try {
-          setStatus(`พบวิดีโอ กำลังลองโหลด…`, 0);
-          const media = await downloadMediaUrl(link, url.href);
-          if (await importMedia(media.blob, media.name)) { $('url').value = ''; return; }
-        } catch (e) { lastError = e.message || ''; }
-      }
-      setStatus(lastError || 'พบลิงก์วิดีโอ แต่ไม่สามารถโหลดได้ · เว็บอาจปิดกั้นการเข้าถึง', null, true); return;
+    setStatus('กำลังตรวจสอบลิงก์ผ่านเซิร์ฟเวอร์…', 0);
+    const info = await resolvePageUrl(url.href);
+    if (info.kind === 'media') {
+      setStatus('พบไฟล์สื่อ กำลังดาวน์โหลด…', 0);
+      const media = await downloadMediaUrl(url.href, url.href);
+      if (await importMedia(media.blob, media.name)) $('url').value = '';
+      return;
     }
-    // Direct media URL
-    const media = await downloadMediaUrl(url.href, url.href);
-    if (await importMedia(media.blob, media.name)) $('url').value = '';
+    if (info.kind !== 'page' || !info.candidates?.length) {
+      setStatus(info.message || 'ไม่พบไฟล์วิดีโอที่ตรวจจับได้ · เว็บอาจโหลดวิดีโอด้วย JavaScript หรือต้องเข้าสู่ระบบ', null, true);
+      return;
+    }
+    let lastError = '';
+    for (const link of info.candidates) {
+      try {
+        setStatus('พบวิดีโอ กำลังดาวน์โหลดผ่านเซิร์ฟเวอร์…', 0);
+        const media = await downloadMediaUrl(link, url.href);
+        if (await importMedia(media.blob, media.name)) { $('url').value = ''; return; }
+      } catch (e) { lastError = e.message || ''; }
+    }
+    setStatus(lastError || 'พบลิงก์วิดีโอ แต่ดาวน์โหลดไม่ได้ · อาจเป็นสตรีมที่ยังไม่รองรับหรือเว็บต้องเข้าสู่ระบบ', null, true);
   } catch (e) {
     setStatus(e.message || 'โหลดไฟล์ไม่สำเร็จ', null, true);
   } finally { $('go').disabled = false; }
