@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pocket Audio">
+<meta name="theme-color" content="#0f1413">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Pocket Audio</title>
+<style>
+  :root { --bg:#0f1413; --panel:#18201e; --line:#26312e; --text:#e9f1ee; --muted:#8a9a95; --accent:#3fd6b0; --warn:#ff7a6b; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Sukhumvit Set","Thonburi",system-ui,sans-serif; }
+  body { padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); min-height:100vh; }
+  header { display:flex; align-items:baseline; justify-content:space-between; padding:14px 16px 6px; }
+  h1 { font-size:22px; margin:0; }
+  h1 span { color:var(--accent); }
+  #usage { font-size:12px; color:var(--muted); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; margin:8px 12px; padding:12px; }
+  .row { display:flex; gap:8px; }
+  input[type=url], input[type=text] { flex:1; min-width:0; background:#0c1110; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:11px 12px; font:inherit; font-size:15px; }
+  button { font:inherit; cursor:pointer; }
+  .btn { background:var(--accent); color:#04201a; border:none; border-radius:10px; padding:11px 14px; font-weight:700; font-size:15px; white-space:nowrap; }
+  .btn.ghost { background:none; color:var(--text); border:1px solid var(--line); font-weight:600; }
+  .btn:disabled { opacity:.4; }
+  .or { text-align:center; color:var(--muted); font-size:12px; margin:10px 0; }
+  .full { width:100%; }
+  #status { font-size:13px; color:var(--muted); margin-top:10px; display:none; }
+  #status.err { color:var(--warn); }
+  .bar { height:4px; background:#0c1110; border-radius:3px; overflow:hidden; margin-top:6px; }
+  .bar i { display:block; height:100%; width:0; background:var(--accent); transition:width .2s; }
+  h2 { font-size:14px; color:var(--muted); font-weight:600; margin:16px 16px 6px; display:flex; justify-content:space-between; }
+  #list { padding:0 12px 220px; }
+  .empty { color:var(--muted); text-align:center; padding:30px 10px; font-size:14px; line-height:1.6; }
+  .track { display:flex; align-items:center; gap:10px; padding:11px 10px; border-radius:12px; border:1px solid transparent; }
+  .track.on { background:var(--panel); border-color:var(--line); }
+  .track .ic { width:38px; height:38px; border-radius:10px; background:#1f2a27; display:flex; align-items:center; justify-content:center; flex:0 0 auto; color:var(--accent); font-size:16px; }
+  .track .info { flex:1; min-width:0; cursor:pointer; }
+  .track .t { font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .track.on .t { color:var(--accent); font-weight:600; }
+  .track .s { font-size:12px; color:var(--muted); margin-top:2px; }
+  .track .pb { height:3px; background:#1f2a27; border-radius:2px; margin-top:5px; overflow:hidden; }
+  .track .pb i { display:block; height:100%; background:#2b8f77; }
+  .track .act { background:none; border:none; color:var(--muted); font-size:16px; padding:6px; }
+  .track .act.danger { color:var(--warn); font-size:12px; font-weight:700; }
+  .track input { font-size:14px; padding:7px 9px; }
+  #player { position:fixed; left:0; right:0; bottom:0; background:rgba(18,25,23,.97); border-top:1px solid var(--line);
+    padding:10px 16px calc(12px + env(safe-area-inset-bottom)); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
+  #pTitle { font-size:15px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; }
+  #seek { width:100%; accent-color:var(--accent); margin:8px 0 0; }
+  .times { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .ctrls { display:flex; align-items:center; justify-content:space-between; margin-top:4px; }
+  .ctrls button { background:none; border:none; color:var(--text); font-size:20px; width:44px; height:44px; border-radius:50%; }
+  .ctrls button.mode { color:var(--muted); font-size:17px; position:relative; opacity:.35; filter:grayscale(1); }
+  .ctrls button.mode.on { color:var(--accent); opacity:1; filter:none; }
+  #play { width:60px; height:60px; background:var(--accent); color:#04201a; font-size:24px; }
+  .sub { display:flex; justify-content:center; gap:10px; margin-top:6px; }
+  .chip { background:#1f2a27; color:var(--text); border:1px solid var(--line); border-radius:16px; padding:5px 12px; font-size:13px; }
+  .chip.on { border-color:var(--accent); color:var(--accent); }
+  .rep1 { position:absolute; font-size:9px; right:9px; top:9px; font-weight:800; }
+  #sheet { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:flex-end; z-index:20; }
+  #sheet .box { background:var(--panel); width:100%; border-radius:18px 18px 0 0; padding:14px 14px calc(16px + env(safe-area-inset-bottom)); }
+  #sheet .box h3 { margin:2px 4px 10px; font-size:15px; }
+  #sheet .opts { display:flex; flex-wrap:wrap; gap:8px; }
+  #sheet .opts button { flex:1 1 30%; padding:12px; border-radius:10px; background:#0c1110; color:var(--text); border:1px solid var(--line); font-size:15px; }
+  #sheet .opts button.on { border-color:var(--accent); color:var(--accent); }
+  .tip { font-size:12px; color:var(--muted); margin-top:8px; line-height:1.5; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pocket <span>Audio</span></h1>
+  <div id="usage"></div>
+</header>
+
+<div class="card">
+  <div class="row">
+    <input id="url" type="url" inputmode="url" placeholder="วางลิงก์ไฟล์วิดีโอ เช่น https://…/clip.mp4" autocomplete="off">
+    <button class="btn" id="go">โหลดเสียง</button>
+  </div>
+  <div class="or">หรือ</div>
+  <button class="btn ghost full" id="pick">📁 เลือกวิดีโอ / ไฟล์เสียงจากเครื่อง</button>
+  <input id="file" type="file" accept="video/*,audio/*,.mp4,.mov,.m4v,.m4a,.mp3,.aac,.wav" multiple hidden>
+  <div id="status"><span id="statusText"></span><div class="bar"><i id="statusBar"></i></div></div>
+</div>
+
+<h2><span>คลังเสียง</span><span id="count"></span></h2>
+<div id="list"></div>
+
+<div id="player">
+  <div id="pTitle">ยังไม่ได้เลือกเสียง</div>
+  <input id="seek" type="range" min="0" max="1000" value="0" step="1">
+  <div class="times"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
+  <div class="ctrls">
+    <button class="mode" id="shuffle" title="สุ่ม">🔀</button>
+    <button id="prev" title="ก่อนหน้า">⏮</button>
+    <button id="back" title="ถอย 15 วินาที">↺</button>
+    <button id="play" title="เล่น/หยุด">▶</button>
+    <button id="fwd" title="ข้าม 15 วินาที">↻</button>
+    <button id="next" title="ถัดไป">⏭</button>
+    <button class="mode" id="repeat" title="เล่นซ้ำ">🔁</button>
+  </div>
+  <div class="sub">
+    <button class="chip" id="speedBtn">ความเร็ว 1×</button>
+    <button class="chip" id="sleepBtn">⏾ ตั้งเวลาปิด</button>
+  </div>
+</div>
+
+<div id="sheet"><div class="box"><h3 id="sheetTitle"></h3><div class="opts" id="sheetOpts"></div></div></div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// ================= storage (IndexedDB) =================
+let dbp = null;
+function db() {
+  if (!dbp) dbp = new Promise((res, rej) => {
+    const r = indexedDB.open('pocketaudio', 1);
+    r.onupgradeneeded = () => { const d = r.result; d.createObjectStore('meta', { keyPath: 'id' }); d.createObjectStore('blobs'); };
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  return dbp;
+}
+async function tx(store, mode, fn) {
+  const d = await db();
+  return new Promise((res, rej) => {
+    const t = d.transaction(store, mode), s = t.objectStore(store);
+    let out; const r = fn(s); if (r) r.onsuccess = () => out = r.result;
+    t.oncomplete = () => res(out); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+  });
+}
+const putMeta = m => tx('meta', 'readwrite', s => s.put(m));
+const allMeta = () => tx('meta', 'readonly', s => s.getAll());
+const putBlob = (id, b) => tx('blobs', 'readwrite', s => s.put(b, id));
+const getBlob = id => tx('blobs', 'readonly', s => s.get(id));
+async function removeTrack(id) { await tx('meta', 'readwrite', s => s.delete(id)); await tx('blobs', 'readwrite', s => s.delete(id)); }
+
+// ================= MP4 / MOV audio extraction (no re-encoding) =================
+const CONTAINERS = new Set(['moov', 'trak', 'mdia', 'minf', 'stbl', 'edts', 'dinf']);
+const typeAt = (u8, p) => String.fromCharCode(u8[p], u8[p + 1], u8[p + 2], u8[p + 3]);
+async function readBytes(blob, start, len) { return new Uint8Array(await blob.slice(start, start + len).arrayBuffer()); }
+
+async function topBoxes(blob) {
+  const out = []; let pos = 0;
+  while (pos + 8 <= blob.size) {
+    const h = await readBytes(blob, pos, 16), dv = new DataView(h.buffer);
+    let size = dv.getUint32(0), hdr = 8; const type = typeAt(h, 4);
+    if (size === 1) { size = Number(dv.getBigUint64(8)); hdr = 16; } else if (size === 0) size = blob.size - pos;
+    if (size < 8) break;
+    out.push({ type, start: pos, size, hdr }); pos += size;
+  }
+  return out;
+}
+function kids(u8, start, end) {
+  const out = [], dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength); let p = start;
+  while (p + 8 <= end) {
+    let size = dv.getUint32(p), hdr = 8; const type = typeAt(u8, p + 4);
+    if (size === 1) { size = Number(dv.getBigUint64(p + 8)); hdr = 16; } else if (size === 0) size = end - p;
+    if (size < 8 || p + size > end) break;
+    out.push({ type, start: p, size, hdr }); p += size;
+  }
+  return out;
+}
+const child = (u8, box, type) => kids(u8, box.start + box.hdr, box.start + box.size).find(k => k.type === type);
+function header(len, type) { const b = new Uint8Array(8); new DataView(b.buffer).setUint32(0, len); for (let i = 0; i < 4; i++) b[4 + i] = type.charCodeAt(i); return b; }
+function join(parts) { const n = parts.reduce((a, p) => a + p.length, 0), o = new Uint8Array(n); let q = 0; parts.forEach(p => { o.set(p, q); q += p.length; }); return o; }
+
+// Returns a smaller .m4a Blob containing only the sound track, or null if the file can't be handled.
+async function extractAudio(blob) {
+  const tops = await topBoxes(blob);
+  const moovBox = tops.find(b => b.type === 'moov');
+  if (!moovBox || tops.some(b => b.type === 'moof')) return null;
+  if (moovBox.size > 200 * 1024 * 1024) return null;
+  const u8 = await readBytes(blob, moovBox.start, moovBox.size);
+  const moov = { type: 'moov', start: 0, size: moovBox.size, hdr: moovBox.hdr };
+  const moovKids = kids(u8, moov.hdr, moov.size);
+  if (moovKids.some(k => k.type === 'mvex')) return null;
+  const audio = moovKids.filter(k => k.type === 'trak').find(t => {
+    const mdia = child(u8, t, 'mdia'); const hdlr = mdia && child(u8, mdia, 'hdlr');
+    return hdlr && typeAt(u8, hdlr.start + hdlr.hdr + 8) === 'soun';
+  });
+  if (!audio) throw new Error('NO_AUDIO');
+  const stbl = child(u8, child(u8, child(u8, audio, 'mdia'), 'minf'), 'stbl');
+  const dv = new DataView(u8.buffer);
+  const stsz = child(u8, stbl, 'stsz'), stsc = child(u8, stbl, 'stsc');
+  const stco = child(u8, stbl, 'stco') || child(u8, stbl, 'co64');
+  if (!stsz || !stsc || !stco) return null;
+  // sample sizes
+  let p = stsz.start + stsz.hdr + 4;
+  const fixed = dv.getUint32(p), nSamples = dv.getUint32(p + 4); p += 8;
+  const sizeOf = i => fixed || dv.getUint32(p + i * 4);
+  // chunk offsets
+  let q = stco.start + stco.hdr + 4; const nChunks = dv.getUint32(q); q += 4;
+  const offs = new Array(nChunks);
+  for (let i = 0; i < nChunks; i++) offs[i] = stco.type === 'co64' ? Number(dv.getBigUint64(q + i * 8)) : dv.getUint32(q + i * 4);
+  // samples per chunk
+  let r = stsc.start + stsc.hdr + 4; const nEnt = dv.getUint32(r); r += 4;
+  const ent = []; for (let i = 0; i < nEnt; i++) ent.push([dv.getUint32(r + i * 12), dv.getUint32(r + i * 12 + 4)]);
+  const chunks = []; let si = 0;
+  for (let e = 0; e < nEnt; e++) {
+    const first = ent[e][0], last = e + 1 < nEnt ? ent[e + 1][0] - 1 : nChunks, spc = ent[e][1];
+    for (let c = first; c <= last && c <= nChunks; c++) {
+      let len = 0; for (let k = 0; k < spc && si < nSamples; k++, si++) len += sizeOf(si);
+      chunks.push({ off: offs[c - 1], len });
+    }
+  }
+  if (si !== nSamples || chunks.length !== nChunks) return null;
+  // rebuild the movie header keeping only mvhd + the sound track
+  const build = newOffs => {
+    const rebuild = box => {
+      if (box.type === 'stco' || box.type === 'co64') {
+        const b = new Uint8Array(16 + 4 * nChunks), d = new DataView(b.buffer);
+        d.setUint32(0, b.length); b.set([115, 116, 99, 111], 4); d.setUint32(12, nChunks);
+        newOffs.forEach((o, i) => d.setUint32(16 + i * 4, o)); return b;
+      }
+      if (!CONTAINERS.has(box.type)) return u8.subarray(box.start, box.start + box.size);
+      const parts = kids(u8, box.start + box.hdr, box.start + box.size).map(rebuild);
+      const n = 8 + parts.reduce((a, x) => a + x.length, 0);
+      return join([header(n, box.type), ...parts]);
+    };
+    const parts = moovKids.filter(k => k.type === 'mvhd' || k === audio).map(rebuild);
+    const n = 8 + parts.reduce((a, x) => a + x.length, 0);
+    return join([header(n, 'moov'), ...parts]);
+  };
+  const ftyp = join([header(28, 'ftyp'), new TextEncoder().encode('M4A '), new Uint8Array(4), new TextEncoder().encode('M4A mp42isom')]);
+  const moovLen = build(new Array(nChunks).fill(0)).length;
+  let pos = ftyp.length + moovLen + 8; const newOffs = [];
+  chunks.forEach(c => { newOffs.push(pos); pos += c.len; });
+  if (pos > 0xFFFFFFFF) return null;
+  const moovNew = build(newOffs);
+  const dataLen = pos - (ftyp.length + moovLen + 8);
+  const slices = []; let run = null;
+  chunks.forEach(c => {
+    if (run && run.end === c.off) run.end += c.len;
+    else { if (run) slices.push(blob.slice(run.start, run.end)); run = { start: c.off, end: c.off + c.len }; }
+  });
+  if (run) slices.push(blob.slice(run.start, run.end));
+  return new Blob([ftyp, moovNew, header(dataLen + 8, 'mdat'), ...slices], { type: 'audio/mp4' });
+}
+
+// ================= helpers =================
+const fmt = s => { if (!isFinite(s) || s < 0) s = 0; s = Math.floor(s); const h = s / 3600 | 0, m = (s % 3600) / 60 | 0, x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
+const mb = b => b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : (b / 1e6).toFixed(1) + ' MB';
+function setStatus(t, frac, err) {
+  $('status').style.display = t ? 'block' : 'none';
+  $('status').classList.toggle('err', !!err);
+  $('statusText').textContent = t || '';
+  $('statusBar').style.width = (frac == null ? 0 : Math.round(frac * 100)) + '%';
+  $('statusBar').parentElement.style.display = frac == null ? 'none' : 'block';
+}
+function probe(blob) {
+  return new Promise(res => {
+    const a = new Audio(), u = URL.createObjectURL(blob);
+    const done = v => { URL.revokeObjectURL(u); a.removeAttribute('src'); res(v); };
+    a.preload = 'metadata';
+    a.onloadedmetadata = () => done(isFinite(a.duration) ? a.duration : 0);
+    a.onerror = () => done(null);
+    setTimeout(() => done(null), 15000);
+    a.src = u;
+  });
+}
+function cleanName(n) {
+  try { n = decodeURIComponent(n); } catch (e) {}
+  n = n.replace(/\.[a-z0-9]{2,4}$/i, '').replace(/[_]+/g, ' ').trim();
+  return n || 'เสียงไม่มีชื่อ';
+}
+
+// ================= importing =================
+async function importMedia(blob, name) {
+  setStatus(`กำลังแยกเสียง: ${name}`, null);
+  let out = null, note = '';
+  const isMp4 = /\.(mp4|m4v|mov|m4a|3gp)$/i.test(name) || /mp4|quicktime|3gpp/.test(blob.type);
+  if (isMp4) {
+    try { out = await extractAudio(blob); }
+    catch (e) { if (e.message === 'NO_AUDIO') { setStatus(`“${name}” ไม่มีเสียงในไฟล์`, null, true); return false; } out = null; }
+  }
+  let dur = null;
+  if (out) { dur = await probe(out); if (dur == null) out = null; }
+  if (!out) {
+    out = blob; dur = await probe(out);
+    if (dur == null) { setStatus(`เล่นไฟล์ “${name}” บน iPhone ไม่ได้ ลองไฟล์ .mp4 / .mov / .m4a / .mp3`, null, true); return false; }
+    if (isMp4 || /^video\//.test(blob.type)) note = ' (เก็บทั้งไฟล์)';
+  }
+  const id = 't' + Date.now() + Math.random().toString(36).slice(2, 6);
+  try {
+    await putBlob(id, out);
+    await putMeta({ id, title: cleanName(name), size: out.size, orig: blob.size, duration: dur || 0, pos: 0, added: Date.now() });
+  } catch (e) {
+    setStatus('พื้นที่เก็บไม่พอ ลองลบเสียงเก่าออกบ้าง', null, true); return false;
+  }
+  try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
+  const saved = blob.size > out.size ? ` · เล็กลงจาก ${mb(blob.size)} เหลือ ${mb(out.size)}` : '';
+  setStatus(`เพิ่ม “${cleanName(name)}” แล้ว${saved}${note}`, null);
+  await refresh();
+  return true;
+}
+
+const PAGE_SITES = /(^|\.)(youtube\.com|youtu\.be|tiktok\.com|facebook\.com|fb\.watch|instagram\.com|twitter\.com|x\.com|vimeo\.com|bilibili\.com|dailymotion\.com)$/i;
+$('go').onclick = async () => {
+  let u = $('url').value.trim(); if (!u) return;
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  let url; try { url = new URL(u); } catch (e) { setStatus('ลิงก์ไม่ถูกต้อง', null, true); return; }
+  if (PAGE_SITES.test(url.hostname)) {
+    setStatus('ลิงก์นี้เป็นหน้าเว็บของแพลตฟอร์มวิดีโอ ใช้ไม่ได้ ต้องเป็นลิงก์ที่เปิดแล้วได้ไฟล์วิดีโอโดยตรง (เช่น ลงท้าย .mp4)', null, true); return;
+  }
+  $('go').disabled = true;
+  try {
+    setStatus('กำลังเชื่อมต่อ…', 0);
+    let res;
+    try { res = await fetch(url.href); }
+    catch (e) { setStatus('เว็บนี้ไม่อนุญาตให้แอปโหลดไฟล์โดยตรง · ให้โหลดไฟล์ลงเครื่องก่อน แล้วกด “เลือกจากเครื่อง”', null, true); return; }
+    if (!res.ok) { setStatus(`โหลดไม่สำเร็จ (รหัส ${res.status})`, null, true); return; }
+    const ct = res.headers.get('content-type') || '';
+    if (/text\/html/.test(ct)) { setStatus('ลิงก์นี้เป็นหน้าเว็บ ไม่ใช่ไฟล์วิดีโอ', null, true); return; }
+    const total = +res.headers.get('content-length') || 0;
+    const reader = res.body.getReader(); const parts = []; let got = 0;
+    for (;;) {
+      const { done, value } = await reader.read(); if (done) break;
+      parts.push(value); got += value.length;
+      setStatus(`กำลังดาวน์โหลด ${mb(got)}${total ? ' / ' + mb(total) : ''}`, total ? got / total : null);
+    }
+    const blob = new Blob(parts, { type: ct });
+    const name = url.pathname.split('/').pop() || url.hostname;
+    if (await importMedia(blob, name)) $('url').value = '';
+  } finally { $('go').disabled = false; }
+};
+$('url').addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); });
+$('pick').onclick = () => $('file').click();
+$('file').addEventListener('change', async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  for (const f of files) await importMedia(f, f.name);
+});
+
+// ================= library =================
+let tracks = [], editing = null, confirmDel = null;
+async function refresh() {
+  tracks = (await allMeta()).sort((a, b) => a.added - b.added);
+  renderList();
+  $('count').textContent = tracks.length ? tracks.length + ' รายการ' : '';
+  const used = tracks.reduce((a, t) => a + t.size, 0);
+  $('usage').textContent = tracks.length ? 'ใช้พื้นที่ ' + mb(used) : '';
+}
+function renderList() {
+  const box = $('list'); box.innerHTML = '';
+  if (!tracks.length) {
+    box.innerHTML = '<div class="empty">ยังไม่มีเสียงในคลัง<br>วางลิงก์ไฟล์วิดีโอ หรือเลือกวิดีโอจากเครื่องด้านบน</div>'; return;
+  }
+  tracks.forEach(t => {
+    const el = document.createElement('div'); el.className = 'track' + (t.id === cur ? ' on' : '');
+    const ic = document.createElement('div'); ic.className = 'ic'; ic.textContent = t.id === cur && !audio.paused ? '▶' : '♪';
+    el.appendChild(ic);
+    const info = document.createElement('div'); info.className = 'info';
+    if (editing === t.id) {
+      const inp = document.createElement('input'); inp.type = 'text'; inp.value = t.title;
+      const save = async () => { const v = inp.value.trim(); if (v) { t.title = v; await putMeta(t); } editing = null; renderList(); if (t.id === cur) showNow(); };
+      inp.onkeydown = e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { editing = null; renderList(); } };
+      inp.onblur = save;
+      info.appendChild(inp); setTimeout(() => inp.focus(), 0);
+    } else {
+      info.innerHTML = `<div class="t"></div><div class="s"></div>`;
+      info.querySelector('.t').textContent = t.title;
+      info.querySelector('.s').textContent = `${fmt(t.duration)} · ${mb(t.size)}` + (t.pos > 5 && t.pos < t.duration - 5 ? ` · ฟังถึง ${fmt(t.pos)}` : '');
+      if (t.pos > 5 && t.duration) { const pb = document.createElement('div'); pb.className = 'pb'; pb.innerHTML = `<i style="width:${Math.min(100, t.pos / t.duration * 100)}%"></i>`; info.appendChild(pb); }
+      info.onclick = () => { if (t.id === cur) togglePlay(); else playTrack(t.id); };
+    }
+    el.appendChild(info);
+    const ed = document.createElement('button'); ed.className = 'act'; ed.textContent = '✏️'; ed.title = 'เปลี่ยนชื่อ';
+    ed.onclick = () => { editing = t.id; renderList(); };
+    const del = document.createElement('button'); del.className = 'act' + (confirmDel === t.id ? ' danger' : '');
+    del.textContent = confirmDel === t.id ? 'ลบ?' : '🗑'; del.title = 'ลบ';
+    del.onclick = async () => {
+      if (confirmDel !== t.id) { confirmDel = t.id; renderList(); setTimeout(() => { if (confirmDel === t.id) { confirmDel = null; renderList(); } }, 3000); return; }
+      confirmDel = null;
+      if (t.id === cur) { audio.pause(); audio.removeAttribute('src'); cur = null; showNow(); }
+      await removeTrack(t.id); await refresh();
+    };
+    el.appendChild(ed); el.appendChild(del);
+    box.appendChild(el);
+  });
+}
+
+// ================= player =================
+const audio = new Audio(); audio.preload = 'auto';
+let cur = null, objUrl = null, shuffle = false, repeat = 'off', speed = 1, sleepAt = 0, sleepEnd = false, lastSave = 0, unlocked = false;
+try { const s = JSON.parse(localStorage.getItem('pocketaudio-prefs') || '{}'); shuffle = !!s.shuffle; repeat = s.repeat || 'off'; speed = s.speed || 1; } catch (e) {}
+const savePrefs = () => { try { localStorage.setItem('pocketaudio-prefs', JSON.stringify({ shuffle, repeat, speed })); } catch (e) {} };
+
+// iOS only lets audio start from a tap: "unlock" the player on the first touch
+function silentWav() {
+  const n = 800, b = new ArrayBuffer(44 + n), d = new DataView(b), w = (o, s) => { for (let i = 0; i < s.length; i++) d.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); d.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt '); d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 1, true);
+  d.setUint32(24, 8000, true); d.setUint32(28, 8000, true); d.setUint16(32, 1, true); d.setUint16(34, 8, true); w(36, 'data'); d.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) d.setUint8(44 + i, 128);
+  return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+}
+document.addEventListener('pointerdown', () => {
+  if (unlocked || cur) return; unlocked = true;
+  audio.src = silentWav(); audio.play().then(() => audio.pause()).catch(() => {});
+}, { capture: true });
+
+async function playTrack(id, autoplay = true) {
+  const t = tracks.find(x => x.id === id); if (!t) return;
+  if (cur && cur !== id) savePos(true);
+  cur = id;
+  const blob = await getBlob(id);
+  if (!blob) { setStatus('หาไฟล์เสียงไม่เจอ', null, true); return; }
+  if (objUrl) URL.revokeObjectURL(objUrl);
+  objUrl = URL.createObjectURL(blob);
+  audio.src = objUrl;
+  const start = t.pos > 5 && t.pos < t.duration - 5 ? t.pos : 0;
+  audio.addEventListener('loadedmetadata', () => { try { audio.currentTime = start; } catch (e) {} audio.playbackRate = speed; }, { once: true });
+  audio.playbackRate = speed;
+  showNow(); renderList();
+  if (autoplay) { try { await audio.play(); } catch (e) { $('play').textContent = '▶'; } }
+}
+function togglePlay() {
+  if (!cur) { if (tracks.length) playTrack(tracks[0].id); return; }
+  if (audio.paused) audio.play().catch(() => {}); else audio.pause();
+}
+function nextId(dir) {
+  if (!tracks.length) return null;
+  const i = tracks.findIndex(t => t.id === cur);
+  if (shuffle && tracks.length > 1 && dir > 0) { let j; do { j = Math.random() * tracks.length | 0; } while (j === i); return tracks[j].id; }
+  let j = i + dir;
+  if (j >= tracks.length) j = repeat === 'all' ? 0 : -1;
+  if (j < 0) j = dir < 0 ? 0 : -1;
+  return j >= 0 ? tracks[j].id : null;
+}
+function next() { const id = nextId(1); if (id) playTrack(id); }
+function prev() { if (audio.currentTime > 4) { audio.currentTime = 0; return; } const id = nextId(-1); if (id) playTrack(id); }
+function skip(s) { if (!cur) return; audio.currentTime = Math.max(0, Math.min((audio.duration || 0) - .5, audio.currentTime + s)); }
+
+async function savePos(force) {
+  if (!cur) return;
+  const now = Date.now(); if (!force && now - lastSave < 5000) return; lastSave = now;
+  const t = tracks.find(x => x.id === cur); if (!t) return;
+  t.pos = audio.currentTime || 0;
+  if (isFinite(audio.duration) && audio.duration > 0) t.duration = audio.duration;
+  try { await putMeta(t); } catch (e) {}
+}
+
+function showNow() {
+  const t = tracks.find(x => x.id === cur);
+  $('pTitle').textContent = t ? t.title : 'ยังไม่ได้เลือกเสียง';
+  if ('mediaSession' in navigator && t) {
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: t.title, artist: 'Pocket Audio',
+        artwork: [{ src: 'icon-512.png', sizes: '512x512', type: 'image/png' }, { src: 'icon-180.png', sizes: '180x180', type: 'image/png' }] });
+    } catch (e) {}
+  }
+}
+function updatePosState() {
+  if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return;
+  try { if (isFinite(audio.duration) && audio.duration > 0) navigator.mediaSession.setPositionState({ duration: audio.duration, playbackRate: audio.playbackRate, position: Math.min(audio.currentTime, audio.duration) }); } catch (e) {}
+}
+if ('mediaSession' in navigator) {
+  const h = (a, f) => { try { navigator.mediaSession.setActionHandler(a, f); } catch (e) {} };
+  h('play', () => togglePlay()); h('pause', () => audio.pause());
+  h('previoustrack', prev); h('nexttrack', next);
+  h('seekbackward', d => skip(-(d && d.seekOffset || 15))); h('seekforward', d => skip(d && d.seekOffset || 15));
+  h('seekto', d => { if (d && d.seekTime != null) { audio.currentTime = d.seekTime; updatePosState(); } });
+}
+
+let seeking = false;
+audio.addEventListener('timeupdate', () => {
+  if (!cur) return;
+  if (!seeking && audio.duration) $('seek').value = Math.round(audio.currentTime / audio.duration * 1000);
+  $('tCur').textContent = fmt(audio.currentTime); $('tDur').textContent = fmt(audio.duration);
+  savePos(); updatePosState();
+  if (sleepAt && Date.now() >= sleepAt) { audio.pause(); setSleep(0); }
+});
+audio.addEventListener('play', () => { if (!cur) return; $('play').textContent = '⏸'; if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing'; renderList(); });
+audio.addEventListener('pause', () => { $('play').textContent = '▶'; if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused'; if (cur) { savePos(true); renderList(); } });
+audio.addEventListener('ended', async () => {
+  if (!cur) return;
+  const t = tracks.find(x => x.id === cur); if (t) { t.pos = 0; try { await putMeta(t); } catch (e) {} }
+  if (sleepEnd) { setSleep(0); renderList(); return; }
+  if (repeat === 'one') { audio.currentTime = 0; audio.play().catch(() => {}); return; }
+  const id = nextId(1); if (id) playTrack(id); else renderList();
+});
+
+$('seek').addEventListener('input', () => { seeking = true; if (audio.duration) $('tCur').textContent = fmt($('seek').value / 1000 * audio.duration); });
+$('seek').addEventListener('change', () => { if (audio.duration) audio.currentTime = $('seek').value / 1000 * audio.duration; seeking = false; updatePosState(); });
+$('play').onclick = togglePlay; $('next').onclick = next; $('prev').onclick = prev;
+$('back').onclick = () => skip(-15); $('fwd').onclick = () => skip(15);
+function paintModes() {
+  $('shuffle').classList.toggle('on', shuffle);
+  $('repeat').classList.toggle('on', repeat !== 'off');
+  $('repeat').innerHTML = '🔁' + (repeat === 'one' ? '<span class="rep1">1</span>' : '');
+  $('speedBtn').textContent = 'ความเร็ว ' + speed + '×';
+  $('speedBtn').classList.toggle('on', speed !== 1);
+}
+$('shuffle').onclick = () => { shuffle = !shuffle; savePrefs(); paintModes(); };
+$('repeat').onclick = () => { repeat = repeat === 'off' ? 'all' : repeat === 'all' ? 'one' : 'off'; savePrefs(); paintModes(); };
+
+function sheet(title, opts, cur) {
+  $('sheetTitle').textContent = title; const box = $('sheetOpts'); box.innerHTML = '';
+  opts.forEach(([v, label, fn]) => {
+    const b = document.createElement('button'); b.textContent = label; if (v === cur) b.className = 'on';
+    b.onclick = () => { fn(v); $('sheet').style.display = 'none'; }; box.appendChild(b);
+  });
+  $('sheet').style.display = 'flex';
+}
+$('sheet').onclick = e => { if (e.target.id === 'sheet') $('sheet').style.display = 'none'; };
+$('speedBtn').onclick = () => sheet('ความเร็วในการเล่น', [.75, 1, 1.25, 1.5, 1.75, 2].map(v => [v, v + '×', v => { speed = v; audio.playbackRate = v; savePrefs(); paintModes(); updatePosState(); }]), speed);
+
+let sleepTick = 0;
+function setSleep(min) {
+  sleepEnd = min === 'end'; sleepAt = typeof min === 'number' && min > 0 ? Date.now() + min * 60000 : 0;
+  clearInterval(sleepTick);
+  const paint = () => {
+    if (sleepEnd) $('sleepBtn').textContent = '⏾ จบเสียงนี้';
+    else if (sleepAt) { const r = Math.max(0, sleepAt - Date.now()); $('sleepBtn').textContent = '⏾ ' + fmt(r / 1000); if (!r) { audio.pause(); setSleep(0); } }
+    else $('sleepBtn').textContent = '⏾ ตั้งเวลาปิด';
+    $('sleepBtn').classList.toggle('on', sleepEnd || !!sleepAt);
+  };
+  paint(); if (sleepAt) sleepTick = setInterval(paint, 1000);
+}
+$('sleepBtn').onclick = () => sheet('หยุดเล่นอัตโนมัติ', [[0, 'ปิด'], [15, '15 นาที'], [30, '30 นาที'], [45, '45 นาที'], [60, '1 ชั่วโมง'], ['end', 'จบเสียงนี้']].map(([v, l]) => [v, l, setSleep]), sleepEnd ? 'end' : 0);
+
+document.addEventListener('visibilitychange', () => { if (document.hidden) savePos(true); });
+
+paintModes();
+refresh();
+try { if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
+</script>
+</body>
+</html>
