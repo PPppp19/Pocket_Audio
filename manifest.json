@@ -1,14 +1,22 @@
 {
-  "name": "Pocket Audio",
-  "short_name": "Pocket Audio",
+  "name": "Film Tone",
+  "short_name": "Film Tone",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "orientation": "any",
-  "background_color": "#0f1413",
-  "theme_color": "#0f1413",
+  "background_color": "#15131c",
+  "theme_color": "#15131c",
   "icons": [
-    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
-  ]
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "orientation": "any"
 }
